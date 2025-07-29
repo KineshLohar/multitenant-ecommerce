@@ -1,12 +1,11 @@
+import { getQueryClient, trpc } from "@/trpc/server";
 import type { Metadata } from "next";
-import { DM_Sans } from 'next/font/google'
-import { Navbar } from "./navbar";
+import { DM_Sans } from 'next/font/google';
 import { Footer } from "./footer";
-import { SearchFilters } from "./search-filters";
-import { getPayload } from "payload";
-import configPromise from "@payload-config"
-import { CustomeCategory } from "../types";
-import { Category } from "@/payload-types";
+import { Navbar } from "./navbar";
+import { SearchFilters, SearchFiltersLoading } from "./search-filters";
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
+import { Suspense } from "react";
 
 const dmSans = DM_Sans({
     subsets: ['latin']
@@ -23,34 +22,19 @@ export default async function Layout({
     children: React.ReactNode;
 }>) {
 
-    const payload = await getPayload({
-        config: configPromise
-    })
-
-    const data = await payload.find({
-        collection: "categories",
-        depth: 1,
-        where: {
-            parent: {
-                exists: false
-            }
-        },
-        sort: "name"
-    })
-
-    const formattedData: CustomeCategory[] = data?.docs?.map(doc => ({
-        ...doc,
-        subcategories: (doc?.subcategories?.docs ?? []).map((subDoc) => ({
-            ...(subDoc as Category),
-            subcategories: undefined
-        }))
-    }))
-
+    const queryClient = getQueryClient();
+    void queryClient.prefetchQuery(
+        trpc.categories.getMany.queryOptions(),
+    );
     return (
         <div className="flex flex-col min-h-screen">
 
             <Navbar />
-            <SearchFilters data={formattedData} />
+            <HydrationBoundary state={dehydrate(queryClient)}>
+                <Suspense fallback={<SearchFiltersLoading />}>
+                    <SearchFilters />
+                </Suspense>
+            </HydrationBoundary>
             <div className=" flex-1 bg-[#F4F4F0]">
                 {children}
             </div>
